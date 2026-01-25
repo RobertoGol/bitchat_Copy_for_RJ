@@ -134,7 +134,7 @@ struct FragmentationTests {
             }
         }
 
-        try await sleep(1.0)
+        try await capture.waitForReceivedMessages(count: 1, timeout: .seconds(2))
 
         let message = try #require(capture.receivedMessages.first, "Expected file transfer message")
         #expect(message.content.hasPrefix("[file]"))

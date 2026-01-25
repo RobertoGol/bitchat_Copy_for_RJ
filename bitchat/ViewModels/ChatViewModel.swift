@@ -279,8 +279,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     var geoNicknames: [String: String] = [:] // pubkeyHex(lowercased) -> nickname
     // Show Tor status once per app launch
     var torStatusAnnounced = false
-    private var torProgressCancellable: AnyCancellable?
-    private var lastTorProgressAnnounced = -1
     // Track whether a Tor restart is pending so we only announce
     // "tor restarted" after an actual restart, not the first launch.
     var torRestartPending: Bool = false
@@ -323,8 +321,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     )
     // Channel activity tracking for background nudges
     var lastPublicActivityAt: [String: Date] = [:]   // channelKey -> last activity time
-    private var lastPublicActivityNotifyAt: [String: Date] = [:]
-    private let channelInactivityThreshold: TimeInterval = TransportConfig.uiChannelInactivityThresholdSeconds
     // Geohash participant tracker
     let participantTracker = GeohashParticipantTracker(activityCutoff: -TransportConfig.uiRecentCutoffFiveMinutesSeconds)
     // Participants who indicated they teleported (by tag in their events)
@@ -448,7 +444,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         self.deduplicationService = MessageDeduplicationService()
 
         // Wire up dependencies
-        self.commandProcessor.chatViewModel = self
+        self.commandProcessor.contextProvider = self
         self.participantTracker.configure(context: self)
         
         // Subscribe to privateChatManager changes to trigger UI updates
@@ -503,8 +499,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             addGeohashOnlySystemMessage(
                 String(localized: "system.tor.starting", comment: "System message when Tor is starting")
             )
-            // Suppress incremental Tor progress messages
-            torProgressCancellable = nil
         } else if !TorManager.shared.torEnforced && !torStatusAnnounced {
             torStatusAnnounced = true
             addGeohashOnlySystemMessage(
@@ -631,8 +625,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             object: nil
         )
         
-        // Listen for delivery acknowledgments
-                
         // When app becomes active, send read receipts for visible messages
         #if os(macOS)
         NotificationCenter.default.addObserver(
@@ -1466,56 +1458,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     func endPrivateChat() {
         selectedPrivateChatPeer = nil
         selectedPrivateChatFingerprint = nil
-    }
-    
-    // MARK: - Nostr Message Handling
-    
-    @MainActor
-    @objc private func handleNostrMessage(_ notification: Notification) {
-        guard let message = notification.userInfo?["message"] as? BitchatMessage else { return }
-        
-        // Store the Nostr pubkey if provided (for messages from unknown senders)
-        if let nostrPubkey = notification.userInfo?["nostrPubkey"] as? String,
-           let senderPeerID = message.senderPeerID {
-            // Store mapping for read receipts
-            nostrKeyMapping[senderPeerID] = nostrPubkey
-        }
-        
-        // Process the Nostr message through the same flow as Bluetooth messages
-        didReceiveMessage(message)
-    }
-    
-    @objc private func handleDeliveryAcknowledgment(_ notification: Notification) {
-        guard let messageId = notification.userInfo?["messageId"] as? String else { return }
-        
-        
-        
-        // Update the delivery status for the message
-        if let index = messages.firstIndex(where: { $0.id == messageId }) {
-            // Update delivery status to delivered
-            messages[index].deliveryStatus = DeliveryStatus.delivered(to: "nostr", at: Date())
-            
-            // Schedule UI update for delivery status
-            // UI will update automatically
-        }
-        
-        // Also update in private chats if it's a private message
-        for (peerID, chatMessages) in privateChats {
-            if let index = chatMessages.firstIndex(where: { $0.id == messageId }) {
-                privateChats[peerID]?[index].deliveryStatus = DeliveryStatus.delivered(to: "nostr", at: Date())
-                // UI will update automatically
-                break
-            }
-        }
-    }
-    
-    @objc private func handleNostrReadReceipt(_ notification: Notification) {
-        guard let receipt = notification.userInfo?["receipt"] as? ReadReceipt else { return }
-        
-        SecureLogger.info("📖 Handling read receipt for message \(receipt.originalMessageID) from Nostr", category: .session)
-        
-        // Process the read receipt through the same flow as Bluetooth read receipts
-        didReceiveReadReceipt(receipt)
     }
     
     @MainActor

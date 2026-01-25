@@ -69,7 +69,6 @@ final class NostrRelayManager: ObservableObject {
     private var messageQueue: [PendingSend] = []
     private let messageQueueLock = NSLock()
     private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
     private var networkService: NetworkActivationService { NetworkActivationService.shared }
     private var shouldUseTor: Bool { networkService.userTorEnabled }
     
@@ -79,8 +78,6 @@ final class NostrRelayManager: ObservableObject {
     private let backoffMultiplier: Double = TransportConfig.nostrRelayBackoffMultiplier
     private let maxReconnectAttempts = TransportConfig.nostrRelayMaxReconnectAttempts
     
-    // Reconnection timer
-    private var reconnectionTimer: Timer?
     // Bump generation to invalidate scheduled reconnects when we reset/disconnect
     private var connectionGeneration: Int = 0
     

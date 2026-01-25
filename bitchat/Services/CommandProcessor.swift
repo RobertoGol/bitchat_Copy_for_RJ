@@ -59,21 +59,10 @@ final class CommandProcessor {
     weak var meshService: Transport?
     private let identityManager: SecureIdentityStateManagerProtocol
 
-    /// Backward-compatible property for existing code
-    weak var chatViewModel: CommandContextProvider? {
-        get { contextProvider }
-        set { contextProvider = newValue }
-    }
-
     init(contextProvider: CommandContextProvider? = nil, meshService: Transport? = nil, identityManager: SecureIdentityStateManagerProtocol) {
         self.contextProvider = contextProvider
         self.meshService = meshService
         self.identityManager = identityManager
-    }
-
-    /// Backward-compatible initializer
-    convenience init(chatViewModel: ChatViewModel? = nil, meshService: Transport? = nil, identityManager: SecureIdentityStateManagerProtocol) {
-        self.init(contextProvider: chatViewModel, meshService: meshService, identityManager: identityManager)
     }
     
     /// Process a command string

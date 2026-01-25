@@ -746,8 +746,8 @@ struct NoiseProtocolTests {
         }
         
         // Get transport ciphers
-        let (initSend, initRecv) = try initiatorHandshake.getTransportCiphers(useExtractedNonce: false)
-        let (respSend, respRecv) = try responderHandshake.getTransportCiphers(useExtractedNonce: false)
+        let (initSend, initRecv, _) = try initiatorHandshake.getTransportCiphers(useExtractedNonce: false)
+        let (respSend, respRecv, _) = try responderHandshake.getTransportCiphers(useExtractedNonce: false)
 
         // Test transport messages (messages after the 3 handshake messages)
         for index in 3..<testVector.messages.count {

@@ -279,8 +279,3 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     }
 }
 
-extension String {
-    var nilIfEmpty: String? {
-        self.isEmpty ? nil : self
-    }
-}

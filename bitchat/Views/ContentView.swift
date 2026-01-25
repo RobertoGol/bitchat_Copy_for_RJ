@@ -40,7 +40,6 @@ struct ContentView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var showPeerList = false
     @State private var showSidebar = false
     @State private var showAppInfo = false
     @State private var showMessageActions = false
@@ -57,7 +56,6 @@ struct ContentView: View {
     @State private var expandedMessageIDs: Set<String> = []
     @State private var showLocationNotes = false
     @State private var notesGeohash: String? = nil
-    @State private var sheetNotesCount: Int = 0
     @State private var imagePreviewURL: URL? = nil
     @State private var recordingAlertMessage: String = ""
     @State private var showRecordingAlert = false
@@ -1181,19 +1179,6 @@ struct ContentView: View {
         )
     }
 
-    // Split a name into base and a '#abcd' suffix if present
-    private func splitNameSuffix(_ name: String) -> (base: String, suffix: String) {
-        guard name.count >= 5 else { return (name, "") }
-        let suffix = String(name.suffix(5))
-        if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
-            ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
-        }) {
-            let base = String(name.dropLast(5))
-            return (base, suffix)
-        }
-        return (name, "")
-    }
-    
     // Compute channel-aware people count and color for toolbar (cross-platform)
     private func channelPeopleCountAndColor() -> (Int, Color) {
         switch locationManager.selectedChannel {
@@ -1308,8 +1293,8 @@ struct ContentView: View {
 
                 // Bookmark toggle (geochats): to the left of #geohash
                 if case .location(let ch) = locationManager.selectedChannel {
-                    Button(action: { GeohashBookmarksStore.shared.toggle(ch.geohash) }) {
-                        Image(systemName: GeohashBookmarksStore.shared.isBookmarked(ch.geohash) ? "bookmark.fill" : "bookmark")
+                    Button(action: { bookmarks.toggle(ch.geohash) }) {
+                        Image(systemName: bookmarks.isBookmarked(ch.geohash) ? "bookmark.fill" : "bookmark")
                             .font(.bitchatSystem(size: 12))
                     }
                     .buttonStyle(.plain)
@@ -1567,7 +1552,7 @@ private extension ContentView {
         } else if let media = mediaAttachment(for: message) {
             mediaMessageRow(message: message, media: media)
         } else {
-            textMessageRow(message)
+            TextMessageView(message: message, expandedMessageIDs: $expandedMessageIDs)
         }
     }
 
@@ -1629,56 +1614,6 @@ private extension ContentView {
             }
         }
         .padding(.vertical, 4)
-    }
-
-    @ViewBuilder
-    private func textMessageRow(_ message: BitchatMessage) -> some View {
-        let cashuTokens = message.content.extractCashuLinks()
-        let lightningLinks = message.content.extractLightningLinks()
-        let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty
-        let isExpanded = expandedMessageIDs.contains(message.id)
-
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 0) {
-                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                if message.isPrivate && message.sender == viewModel.nickname,
-                   let status = message.deliveryStatus {
-                    DeliveryStatusView(status: status)
-                        .padding(.leading, 4)
-                }
-            }
-
-            if isLong && cashuTokens.isEmpty {
-                let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
-                Button(labelKey) {
-                    if isExpanded { expandedMessageIDs.remove(message.id) }
-                    else { expandedMessageIDs.insert(message.id) }
-                }
-                .font(.bitchatSystem(size: 11, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.blue)
-                .padding(.top, 4)
-            }
-
-            if !lightningLinks.isEmpty || !cashuTokens.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(Array(lightningLinks.prefix(3)), id: \.self) { link in
-                        PaymentChipView(paymentType: .lightning(link))
-                    }
-
-                    ForEach(Array(cashuTokens.prefix(3)), id: \.self) { token in
-                        let enc = token.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? token
-                        let urlStr = "cashu:\(enc)"
-                        PaymentChipView(paymentType: .cashu(urlStr))
-                    }
-                }
-                .padding(.top, 6)
-                .padding(.leading, 2)
-            }
-        }
     }
 
     private func expandWindow(ifNeededFor message: BitchatMessage,
